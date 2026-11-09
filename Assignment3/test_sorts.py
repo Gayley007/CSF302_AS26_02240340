@@ -1,77 +1,74 @@
-# Assignment 3 - Part B: tests for sorts.py
-# Run with:   python -m pytest test_sorts.py -v
-#        or:  python test_sorts.py
+# Assignment 3 - Part B: tests
+# Run with:  python -m pytest test_sorts.py -v
 #
-# sorted() is used here only as the trusted answer (brute-force check).
+# Idea: sorted() is our "correct answer". We sort a copy with our own
+# quicksort and check that it gives exactly the same result.
 
 import random
-import unittest
-
 from sorts import quicksort_basic, quicksort_improved
 
-SORTS = [quicksort_basic, quicksort_improved]
+
+def is_correct(sort_function, data):
+    expected = sorted(data)      # the correct answer (only used for checking)
+    my_list = data.copy()        # copy, so the original data is not changed
+    sort_function(my_list)       # sort in place with our quicksort
+    return my_list == expected
 
 
-def check(test, sort_fn, data, **kwargs):
-    expected = sorted(data)
-    a = list(data)
-    result = sort_fn(a, **kwargs)
-    test.assertIsNone(result, "sort should work in place and return None")
-    test.assertEqual(a, expected, f"{sort_fn.__name__} failed on {data}")
+# ---------- Test 1: 500 random lists for each sort ----------
+
+def test_basic_on_500_random_lists():
+    for _ in range(500):
+        n = random.randint(0, 200)                            # random length
+        data = [random.randint(-1000, 1000) for _ in range(n)]
+        assert is_correct(quicksort_basic, data)
 
 
-class TestRandomLists(unittest.TestCase):
-    def test_500_random_lists(self):
-        rng = random.Random(302)
-        for sort_fn in SORTS:
-            for _ in range(500):
-                n = rng.randint(0, 200)
-                data = [rng.randint(-1000, 1000) for _ in range(n)]
-                with self.subTest(sort=sort_fn.__name__, n=n):
-                    check(self, sort_fn, data)
-
-    def test_improved_with_every_cutoff(self):
-        rng = random.Random(7)
-        for cutoff in [1, 4, 8, 16, 32, 64]:
-            for _ in range(100):
-                data = [rng.randint(-50, 50) for _ in range(rng.randint(0, 300))]
-                with self.subTest(cutoff=cutoff):
-                    check(self, quicksort_improved, data, cutoff=cutoff)
+def test_improved_on_500_random_lists():
+    for _ in range(500):
+        n = random.randint(0, 200)
+        data = [random.randint(-1000, 1000) for _ in range(n)]
+        assert is_correct(quicksort_improved, data)
 
 
-class TestSpecialCases(unittest.TestCase):
-    CASES = {
-        "empty": [],
-        "one element": [42],
-        "two elements": [2, 1],
-        "all equal": [7] * 50,
-        "already sorted": list(range(100)),
-        "reverse sorted": list(range(100, 0, -1)),
-        "negative numbers": [-3, -1, -7, 0, -2, 5, -100, 4],
-        "many duplicates (0-9)": [random.Random(1).randint(0, 9) for _ in range(300)],
-    }
+# ---------- Test 2: special cases ----------
 
-    def test_cases(self):
-        for sort_fn in SORTS:
-            for name, data in self.CASES.items():
-                with self.subTest(sort=sort_fn.__name__, case=name):
-                    check(self, sort_fn, data)
+special_cases = [
+    [],                              # empty list
+    [42],                            # one element
+    [7, 7, 7, 7, 7, 7, 7, 7],        # all equal
+    list(range(100)),                # already sorted
+    list(range(100, 0, -1)),         # reverse sorted
+    [-3, -1, -7, 0, -2, 5, -100, 4], # negative numbers
+]
 
 
-class TestLargeInputsImproved(unittest.TestCase):
-    """The improved sort must handle the inputs that break the basic one."""
-
-    def test_large_sorted_and_duplicates(self):
-        n = 100_000
-        for name, data in {
-            "sorted": list(range(n)),
-            "reverse": list(range(n, 0, -1)),
-            "duplicates": [random.randint(0, 9) for _ in range(n)],
-            "all equal": [5] * n,
-        }.items():
-            with self.subTest(case=name):
-                check(self, quicksort_improved, data)
+def test_basic_special_cases():
+    for data in special_cases:
+        assert is_correct(quicksort_basic, data)
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
+def test_improved_special_cases():
+    for data in special_cases:
+        assert is_correct(quicksort_improved, data)
+
+
+# ---------- Test 3: every cutoff value gives the right answer ----------
+
+def test_improved_all_cutoffs():
+    for cutoff in [1, 4, 8, 16, 32, 64]:
+        for _ in range(100):
+            data = [random.randint(-50, 50) for _ in range(random.randint(0, 300))]
+            my_list = data.copy()
+            quicksort_improved(my_list, cutoff)
+            assert my_list == sorted(data)
+
+
+# ---------- Test 4: big inputs that break the basic sort ----------
+
+def test_improved_big_inputs():
+    n = 100000
+    assert is_correct(quicksort_improved, list(range(n)))                         # sorted
+    assert is_correct(quicksort_improved, list(range(n, 0, -1)))                  # reverse
+    assert is_correct(quicksort_improved, [random.randint(0, 9) for _ in range(n)])  # duplicates
+    assert is_correct(quicksort_improved, [5] * n)                                # all equal

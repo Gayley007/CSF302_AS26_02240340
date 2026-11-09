@@ -1,213 +1,241 @@
 # Assignment 3 - Part C: timing experiments
 # Run with:  python analysis.py
-# Writes results.md (tables) and four PNG graphs into this folder.
+# It prints all tables, saves them in results.md, and saves 4 graphs (PNG).
 
-import os
 import random
 import sys
-import threading
 import time
-
 import matplotlib.pyplot as plt
-
 from sorts import quicksort_basic, quicksort_improved
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-SIZES = [1000, 2000, 4000, 8000, 16000, 32000, 64000]
-REPEATS = 3          # best of 3 runs for each measurement
-random.seed(340)
+random.seed(340)    # same random numbers every run
+
+# Everything we print is also saved here and written to results.md at the end.
+output_lines = []
 
 
-def make_input(kind, n):
+def show(text=""):
+    print(text)
+    output_lines.append(text)
+
+
+def make_list(kind, n):
+    # Build one of the three input types.
     if kind == "random":
-        return [random.randint(0, 10**6) for _ in range(n)]
+        return [random.randint(0, 1000000) for _ in range(n)]
     if kind == "sorted":
         return list(range(n))
     if kind == "duplicates":
-        return [random.randint(0, 9) for _ in range(n)]
-    raise ValueError(kind)
+        return [random.randint(0, 9) for _ in range(n)]   # only values 0..9
 
 
-def time_sort(sort_fn, data, repeats=REPEATS, **kwargs):
-    """Best time over `repeats` runs, or the name of the error if it crashed."""
-    best = float("inf")
-    for _ in range(repeats):
-        a = list(data)
+def time_sort(sort_function, data):
+    # Run the sort 3 times on fresh copies and keep the fastest time.
+    # If it crashes with RecursionError, return the text "RecursionError".
+    best = None
+    for _ in range(3):
+        my_list = data.copy()
         start = time.perf_counter()
         try:
-            sort_fn(a, **kwargs)
+            sort_function(my_list)
         except RecursionError:
             return "RecursionError"
-        best = min(best, time.perf_counter() - start)
+        seconds = time.perf_counter() - start
+        if best is None or seconds < best:
+            best = seconds
     return best
 
 
-def fmt(t):
-    return t if isinstance(t, str) else f"{t:.4f}"
+def as_text(t):
+    # Turn a time into text for the table (crashes stay as text).
+    if t == "RecursionError":
+        return t
+    return f"{t:.4f}"
 
 
-lines = []          # markdown output
+# =====================================================================
+# C1. Basic vs improved on random, sorted and duplicate inputs
+# =====================================================================
+sizes = [1000, 2000, 4000, 8000, 16000, 32000, 64000]
+kinds = ["random", "sorted", "duplicates"]
 
+show("# Assignment 3 results")
+show(f"Python {sys.version.split()[0]}, recursion limit {sys.getrecursionlimit()}, "
+     "best of 3 runs, times in seconds.")
+show()
+show("## C1. Time for each input type")
 
-def out(text=""):
-    print(text)
-    lines.append(text)
+basic_times = {}       # e.g. basic_times["sorted"] = [time for each n]
+improved_times = {}
 
-
-# ---------------------------------------------------------------------------
-# C1. Basic vs improved on three input types (default recursion limit)
-# ---------------------------------------------------------------------------
-out(f"# Assignment 3 results\n\nPython {sys.version.split()[0]}, "
-    f"recursion limit {sys.getrecursionlimit()}, best of {REPEATS} runs, times in seconds.\n")
-out("## C1. Time vs n for three input types\n")
-
-results = {}   # (sort name, kind) -> list of times / error strings
-for kind in ["random", "sorted", "duplicates"]:
-    out(f"### Input: {kind}\n")
-    out("| n | quicksort_basic | quicksort_improved |")
-    out("|---|---|---|")
-    for n in SIZES:
-        data = make_input(kind, n)
+for kind in kinds:
+    basic_times[kind] = []
+    improved_times[kind] = []
+    show()
+    show(f"### Input: {kind}")
+    show("| n | quicksort_basic | quicksort_improved |")
+    show("|---|---|---|")
+    for n in sizes:
+        data = make_list(kind, n)
         tb = time_sort(quicksort_basic, data)
         ti = time_sort(quicksort_improved, data)
-        results.setdefault(("basic", kind), []).append(tb)
-        results.setdefault(("improved", kind), []).append(ti)
-        out(f"| {n:,} | {fmt(tb)} | {fmt(ti)} |")
-    out()
+        basic_times[kind].append(tb)
+        improved_times[kind].append(ti)
+        show(f"| {n} | {as_text(tb)} | {as_text(ti)} |")
 
-fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
-for ax, kind in zip(axes, ["random", "sorted", "duplicates"]):
-    for name, marker in [("basic", "o"), ("improved", "s")]:
-        ts = results[(name, kind)]
-        xs = [n for n, t in zip(SIZES, ts) if not isinstance(t, str)]
-        ys = [t for t in ts if not isinstance(t, str)]
-        crashed = [n for n, t in zip(SIZES, ts) if isinstance(t, str)]
-        label = f"quicksort_{name}"
-        if crashed:
-            label += f" (RecursionError for n >= {crashed[0]:,})"
-        ax.plot(xs, ys, marker=marker, label=label)
-    ax.set_title(f"Input: {kind}")
-    ax.set_xlabel("n (number of items)")
-    ax.set_ylabel("Time (seconds)")
-    ax.grid(True)
-    ax.legend(fontsize=8)
-fig.suptitle("C1: quicksort_basic vs quicksort_improved")
-fig.tight_layout()
-fig.savefig(os.path.join(HERE, "graph1_input_types.png"), dpi=120)
-plt.close(fig)
+# Graph 1: one small chart per input type.
+plt.figure(figsize=(15, 4.5))
+for number, kind in enumerate(kinds):
+    plt.subplot(1, 3, number + 1)
+
+    # Only plot the basic times that did NOT crash.
+    ok_sizes = []
+    ok_times = []
+    for n, t in zip(sizes, basic_times[kind]):
+        if t != "RecursionError":
+            ok_sizes.append(n)
+            ok_times.append(t)
+
+    plt.plot(ok_sizes, ok_times, marker="o", label="quicksort_basic (missing points = crash)")
+    plt.plot(sizes, improved_times[kind], marker="s", label="quicksort_improved")
+    plt.title(f"Input: {kind}")
+    plt.xlabel("n (number of items)")
+    plt.ylabel("Time (seconds)")
+    plt.grid(True)
+    plt.legend(fontsize=8)
+plt.tight_layout()
+plt.savefig("graph1_input_types.png")
+plt.close()
 
 
-# ---------------------------------------------------------------------------
-# C2. Show the Theta(n^2) worst case of quicksort_basic on sorted input.
-#     The recursion limit is raised (in a thread with a big stack) so the
-#     sort can finish instead of crashing.
-# ---------------------------------------------------------------------------
-out("## C2. quicksort_basic on sorted input with a raised recursion limit\n")
-out("Recursion limit raised to 100,000 and run in a thread with a 200 MB stack, "
-    "so the worst case can be timed instead of crashing.\n")
-out("| n | time (s) | time / n^2 (x 1e-8) | time / previous |")
-out("|---|---|---|---|")
+# =====================================================================
+# C2. Show that quicksort_basic is O(n^2) on sorted input.
+#     We raise the recursion limit so it can finish instead of crashing.
+# =====================================================================
+sys.setrecursionlimit(20000)
+
+show()
+show("## C2. quicksort_basic on sorted input (recursion limit raised to 20000)")
+show()
+show("| n | time (s) | time / previous time |")
+show("|---|---|---|")
 
 worst_sizes = [1000, 2000, 4000, 8000, 16000]
 worst_times = []
+for n in worst_sizes:
+    my_list = list(range(n))                 # already sorted = worst case
+    start = time.perf_counter()
+    quicksort_basic(my_list)
+    worst_times.append(time.perf_counter() - start)
 
+for k in range(len(worst_sizes)):
+    if k == 0:
+        ratio = "-"
+    else:
+        ratio = f"{worst_times[k] / worst_times[k - 1]:.2f}"   # about 4 means O(n^2)
+    show(f"| {worst_sizes[k]} | {worst_times[k]:.4f} | {ratio} |")
 
-def worst_case_run():
-    sys.setrecursionlimit(100_000)
-    for n in worst_sizes:
-        worst_times.append(time_sort(quicksort_basic, list(range(n)), repeats=1))
+sys.setrecursionlimit(1000)                  # back to normal
 
-
-threading.stack_size(200 * 1024 * 1024)
-t = threading.Thread(target=worst_case_run)
-t.start()
-t.join()
-sys.setrecursionlimit(1000)
-
-prev = None
-for n, tm in zip(worst_sizes, worst_times):
-    ratio = "-" if prev is None else f"{tm / prev:.2f}"
-    out(f"| {n:,} | {tm:.4f} | {tm / n**2 * 1e8:.3f} | {ratio} |")
-    prev = tm
-out()
-
-fig, ax = plt.subplots(figsize=(7, 4.5))
-ax.plot(worst_sizes, worst_times, marker="o", label="quicksort_basic, sorted input (measured)")
+# Graph 2: measured times and a c*n^2 curve for comparison.
 c = worst_times[-1] / worst_sizes[-1] ** 2
-ax.plot(worst_sizes, [c * n**2 for n in worst_sizes], "--", label="c * n^2 (fitted)")
-ax.set_xlabel("n (number of items)")
-ax.set_ylabel("Time (seconds)")
-ax.set_title("C2: worst case T(n) = T(n-1) + Theta(n) = Theta(n^2)")
-ax.grid(True)
-ax.legend()
-fig.tight_layout()
-fig.savefig(os.path.join(HERE, "graph2_worst_case.png"), dpi=120)
-plt.close(fig)
+n_squared_curve = [c * n * n for n in worst_sizes]
+plt.figure(figsize=(7, 4.5))
+plt.plot(worst_sizes, worst_times, marker="o", label="quicksort_basic on sorted input")
+plt.plot(worst_sizes, n_squared_curve, "--", label="c * n^2")
+plt.title("C2: worst case is O(n^2)")
+plt.xlabel("n (number of items)")
+plt.ylabel("Time (seconds)")
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.savefig("graph2_worst_case.png")
+plt.close()
 
 
-# ---------------------------------------------------------------------------
-# C3. Choosing the cutoff (n = 100,000 random values)
-# ---------------------------------------------------------------------------
-out("## C3. quicksort_improved cutoff, n = 100,000 random values\n")
-out("| cutoff | time (s) |")
-out("|---|---|")
-N = 100_000
-data = make_input("random", N)
+# =====================================================================
+# C3. Which cutoff is best? (n = 100,000 random values)
+# =====================================================================
+show()
+show("## C3. Cutoff test, n = 100000 random values")
+show()
+show("| cutoff | time (s) |")
+show("|---|---|")
+
 cutoffs = [1, 4, 8, 16, 32, 64]
-cut_times = []
+cutoff_times = []
+data = make_list("random", 100000)
 for cutoff in cutoffs:
-    tm = time_sort(quicksort_improved, data, repeats=5, cutoff=cutoff)
-    cut_times.append(tm)
-    out(f"| {cutoff} | {tm:.4f} |")
-best_cutoff = cutoffs[cut_times.index(min(cut_times))]
-out(f"\nBest cutoff: **{best_cutoff}**\n")
+    best = None
+    for _ in range(5):                       # 5 runs, keep the fastest
+        my_list = data.copy()
+        start = time.perf_counter()
+        quicksort_improved(my_list, cutoff)
+        seconds = time.perf_counter() - start
+        if best is None or seconds < best:
+            best = seconds
+    cutoff_times.append(best)
+    show(f"| {cutoff} | {best:.4f} |")
 
-fig, ax = plt.subplots(figsize=(7, 4.5))
-ax.plot(cutoffs, cut_times, marker="o")
-ax.set_xscale("log", base=2)
-ax.set_xticks(cutoffs)
-ax.set_xticklabels([str(c) for c in cutoffs])
-ax.set_xlabel("cutoff (largest part sorted by insertion sort)")
-ax.set_ylabel("Time (seconds)")
-ax.set_title("C3: effect of cutoff, n = 100,000 random values")
-ax.grid(True)
-fig.tight_layout()
-fig.savefig(os.path.join(HERE, "graph3_cutoff.png"), dpi=120)
-plt.close(fig)
+best_cutoff = cutoffs[cutoff_times.index(min(cutoff_times))]
+show()
+show(f"Best cutoff: {best_cutoff}")
+
+# Graph 3
+plt.figure(figsize=(7, 4.5))
+plt.plot([str(c) for c in cutoffs], cutoff_times, marker="o")
+plt.title("C3: time for each cutoff (n = 100,000)")
+plt.xlabel("cutoff")
+plt.ylabel("Time (seconds)")
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("graph3_cutoff.png")
+plt.close()
 
 
-# ---------------------------------------------------------------------------
-# C4. Best version vs Python's sorted()
-# ---------------------------------------------------------------------------
-out(f"## C4. quicksort_improved (cutoff={best_cutoff}) vs Python sorted()\n")
-out("| input (n = 100,000) | quicksort_improved | sorted() | ratio |")
-out("|---|---|---|---|")
-cmp_rows = []
-for kind in ["random", "sorted", "duplicates"]:
-    data = make_input(kind, N)
-    ti = time_sort(quicksort_improved, data, cutoff=best_cutoff)
-    ts = time_sort(lambda a: sorted(a), data)
-    cmp_rows.append((kind, ti, ts))
-    out(f"| {kind} | {ti:.4f} | {ts:.4f} | {ti / ts:.0f}x slower |")
-out()
+# =====================================================================
+# C4. Our best quicksort vs Python's sorted()
+# =====================================================================
+def best_quicksort(a):
+    quicksort_improved(a, best_cutoff)
 
-fig, ax = plt.subplots(figsize=(7, 4.5))
-kinds = [r[0] for r in cmp_rows]
-x = range(len(kinds))
-ax.bar([i - 0.2 for i in x], [r[1] for r in cmp_rows], width=0.4,
-       label=f"quicksort_improved (cutoff={best_cutoff})")
-ax.bar([i + 0.2 for i in x], [r[2] for r in cmp_rows], width=0.4, label="sorted() (Timsort, C)")
-ax.set_xticks(list(x))
-ax.set_xticklabels(kinds)
-ax.set_yscale("log")
-ax.set_ylabel("Time (seconds, log scale)")
-ax.set_title("C4: best quicksort vs sorted(), n = 100,000")
-ax.grid(True, axis="y")
-ax.legend()
-fig.tight_layout()
-fig.savefig(os.path.join(HERE, "graph4_vs_sorted.png"), dpi=120)
-plt.close(fig)
 
-with open(os.path.join(HERE, "results.md"), "w", encoding="utf-8") as f:
-    f.write("\n".join(lines) + "\n")
-print("\nSaved results.md and graph1-4 PNGs.")
+def python_sorted(a):
+    sorted(a)
+
+
+show()
+show(f"## C4. quicksort_improved (cutoff {best_cutoff}) vs sorted(), n = 100000")
+show()
+show("| input | quicksort_improved | sorted() | how many times slower |")
+show("|---|---|---|---|")
+
+mine = []
+python = []
+for kind in kinds:
+    data = make_list(kind, 100000)
+    t1 = time_sort(best_quicksort, data)
+    t2 = time_sort(python_sorted, data)
+    mine.append(t1)
+    python.append(t2)
+    show(f"| {kind} | {t1:.4f} | {t2:.4f} | {t1 / t2:.0f}x |")
+
+# Graph 4: bar chart (log scale because sorted() is so much faster)
+positions = [0, 1, 2]
+plt.figure(figsize=(7, 4.5))
+plt.bar([p - 0.2 for p in positions], mine, width=0.4, label="quicksort_improved")
+plt.bar([p + 0.2 for p in positions], python, width=0.4, label="sorted()")
+plt.xticks(positions, kinds)
+plt.yscale("log")
+plt.title("C4: our quicksort vs sorted() (n = 100,000)")
+plt.ylabel("Time (seconds, log scale)")
+plt.legend()
+plt.tight_layout()
+plt.savefig("graph4_vs_sorted.png")
+plt.close()
+
+
+# Save all tables to results.md
+with open("results.md", "w") as f:
+    f.write("\n".join(output_lines) + "\n")
+print("\nSaved results.md and 4 graphs.")
