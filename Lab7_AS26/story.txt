@@ -1,0 +1,9 @@
+Bhutan is a small country in the Eastern Himalayas. It is known for its forests, its high mountains and its many rivers. More than half of the land is covered by forest, and the constitution says that at least sixty percent of the country must stay under forest for all time.
+
+Jigme Dorji National Park is the second largest park in the country. It reaches from warm valleys up to snow and ice. Tigers, snow leopards, takins and red pandas all live there. Rangers place camera traps along the trails, and every few weeks they walk out to change the batteries and collect the photos.
+
+The photos show which animals use each trail and at what time of day. A tiger may pass a camera at night, while a herd of takin may graze near it in the early morning. When the rangers put all the photos together, they can see how the animals move through the park over a whole year.
+
+Farmers who live near the park also share their land with wild animals. Wild boar and monkeys eat the crops, and bears sometimes break into the fields. The park staff work with the villages to build fences and to pay for some of the damage, so that people and animals can live side by side.
+
+Students at the college learn how to store and search this kind of data. A single season of camera traps can produce many thousands of photos, and good algorithms help the team find the pictures they need without looking at every one by hand.
